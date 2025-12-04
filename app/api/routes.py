@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from app.services import square_service, weather_service, holiday_service, openai_service, instagram_service, image_service, settings_service
 
 
@@ -85,6 +85,16 @@ def post_instagram():
     image_url = data.get('image_url')
     caption = data.get('caption')
     
+    # Check if it's a local image (from our own static folder)
+    # If so, use the optimized endpoint to ensure it meets Instagram specs
+    if 'static/images/dishes/' in image_url:
+        filename = image_url.split('/')[-1]
+        # Construct new URL for optimized image
+        # We need the base URL. request.host_url gives http://.../
+        # But we want https if on Render. url_for should handle it with _external=True
+        from flask import url_for
+        image_url = url_for('api.get_optimized_image', filename=filename, _external=True)
+    
     result = instagram_service.post_to_instagram(image_url, caption)
     if result['success']:
         return jsonify(result)
@@ -136,6 +146,14 @@ def update_image_category(filename):
         return jsonify({"success": True})
     else:
         return jsonify({"error": "Failed to update"}), 500
+
+@api_bp.route('/images/optimized/<filename>', methods=['GET'])
+def get_optimized_image(filename):
+    img_io = image_service.optimize_image_for_instagram(filename)
+    if img_io:
+        return send_file(img_io, mimetype='image/jpeg')
+    else:
+        return jsonify({"error": "Image not found or failed to process"}), 404
 
 @api_bp.route('/settings', methods=['GET', 'POST'])
 def settings():

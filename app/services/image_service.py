@@ -2,8 +2,10 @@ import os
 import json
 import shutil
 import random
+import io
+from PIL import Image
 from werkzeug.utils import secure_filename
-from flask import current_app, url_for
+from flask import current_app, url_for, send_file
 
 DISH_IMAGE_MAP_PATH = 'dish_image_map.json'
 
