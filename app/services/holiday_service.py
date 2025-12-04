@@ -39,6 +39,9 @@ def get_holiday_info(country="US"):
         upcoming_response = requests.get(url, params=upcoming_params)
         all_holidays = upcoming_response.json().get("response", {}).get("holidays", [])
         
+        # Filter for National holidays only
+        all_holidays = [h for h in all_holidays if 'National holiday' in h.get('type', [])]
+        
         future_holidays = [h for h in all_holidays if datetime.date.fromisoformat(h["date"]["iso"][:10]) > tomorrow]
         future_holidays.sort(key=lambda h: datetime.date.fromisoformat(h["date"]["iso"][:10]))
         
