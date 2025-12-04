@@ -89,19 +89,14 @@ def post_instagram():
     # If so, use the optimized endpoint to ensure it meets Instagram specs
     if 'static/images/dishes/' in image_url:
         filename = image_url.split('/')[-1]
-        # Construct new URL for optimized image
-        # We need the base URL. request.host_url gives http://.../
-        # But we want https if on Render. url_for should handle it with _external=True
-        from flask import url_for
-        import time
-        image_url = url_for('api.get_optimized_image', filename=filename, _external=True)
-        
-        # Force HTTPS
-        if image_url.startswith('http://'):
-            image_url = image_url.replace('http://', 'https://', 1)
-            
-        # Add cache buster
-        image_url += f"?t={int(time.time())}"
+        # Optimize and upload to Cloudinary
+        optimized_url = image_service.optimize_image_for_instagram(filename)
+        if optimized_url:
+            image_url = optimized_url
+            print(f"DEBUG: Using Cloudinary URL for Instagram: {image_url}")
+        else:
+            print("ERROR: Failed to optimize/upload image to Cloudinary")
+            # Fallback to original logic if upload fails (though likely to fail on IG too)
     
     result = instagram_service.post_to_instagram(image_url, caption)
     if result['success']:
@@ -157,9 +152,11 @@ def update_image_category(filename):
 
 @api_bp.route('/images/optimized/<filename>', methods=['GET'])
 def get_optimized_image(filename):
-    img_io = image_service.optimize_image_for_instagram(filename)
-    if img_io:
-        return send_file(img_io, mimetype='image/jpeg')
+    # This function now uploads to Cloudinary and returns the URL
+    secure_url = image_service.optimize_image_for_instagram(filename)
+    if secure_url:
+        from flask import redirect
+        return redirect(secure_url)
     else:
         return jsonify({"error": "Image not found or failed to process"}), 404
 

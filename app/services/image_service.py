@@ -6,6 +6,8 @@ import io
 from PIL import Image
 from werkzeug.utils import secure_filename
 from flask import current_app, url_for, send_file
+import cloudinary
+import cloudinary.uploader
 
 DISH_IMAGE_MAP_PATH = 'dish_image_map.json'
 
@@ -68,21 +70,22 @@ def upload_image(file, dish_name):
     return True, filename
 
 def optimize_image_for_instagram(filename):
+    # Configure Cloudinary
+    cloudinary.config(
+        cloud_name=current_app.config['CLOUDINARY_CLOUD_NAME'],
+        api_key=current_app.config['CLOUDINARY_API_KEY'],
+        api_secret=current_app.config['CLOUDINARY_API_SECRET']
+    )
+
     upload_folder = current_app.config['UPLOAD_FOLDER']
     file_path = os.path.join(upload_folder, filename)
     
-    print(f"DEBUG: Optimizing image. Upload folder: {upload_folder}")
-    print(f"DEBUG: Full file path: {file_path}")
-    
     if not os.path.exists(file_path):
-        print(f"ERROR: File not found at {file_path}")
-        # Try looking in absolute path if relative fails
+        # Try absolute path fallback
         if not os.path.isabs(file_path):
              abs_path = os.path.abspath(file_path)
-             print(f"DEBUG: Absolute path check: {abs_path}")
              if os.path.exists(abs_path):
                  file_path = abs_path
-                 print("DEBUG: Found at absolute path")
              else:
                  return None
         else:
@@ -103,12 +106,25 @@ def optimize_image_for_instagram(filename):
                 
             # Save to buffer
             img_io = io.BytesIO()
-            # Quality 85 is usually good enough and keeps size down
             img.save(img_io, 'JPEG', quality=85)
             img_io.seek(0)
-            return img_io
+            
+            # Upload to Cloudinary
+            print(f"DEBUG: Uploading {filename} to Cloudinary...")
+            upload_result = cloudinary.uploader.upload(
+                img_io, 
+                public_id=os.path.splitext(filename)[0],
+                folder="restaurant_assistant/dishes",
+                overwrite=True,
+                resource_type="image"
+            )
+            
+            secure_url = upload_result.get('secure_url')
+            print(f"DEBUG: Cloudinary upload success: {secure_url}")
+            return secure_url
+            
     except Exception as e:
-        print(f"Error optimizing image: {e}")
+        print(f"Error optimizing/uploading image: {e}")
         import traceback
         traceback.print_exc()
         return None
