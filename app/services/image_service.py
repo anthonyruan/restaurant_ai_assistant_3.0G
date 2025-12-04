@@ -67,6 +67,52 @@ def upload_image(file, dish_name):
     
     return True, filename
 
+def optimize_image_for_instagram(filename):
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    file_path = os.path.join(upload_folder, filename)
+    
+    print(f"DEBUG: Optimizing image. Upload folder: {upload_folder}")
+    print(f"DEBUG: Full file path: {file_path}")
+    
+    if not os.path.exists(file_path):
+        print(f"ERROR: File not found at {file_path}")
+        # Try looking in absolute path if relative fails
+        if not os.path.isabs(file_path):
+             abs_path = os.path.abspath(file_path)
+             print(f"DEBUG: Absolute path check: {abs_path}")
+             if os.path.exists(abs_path):
+                 file_path = abs_path
+                 print("DEBUG: Found at absolute path")
+             else:
+                 return None
+        else:
+             return None
+        
+    try:
+        with Image.open(file_path) as img:
+            # Convert to RGB if necessary
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+                
+            # Resize if too large (max width 1440px for Instagram)
+            max_width = 1440
+            if img.width > max_width:
+                ratio = max_width / img.width
+                new_height = int(img.height * ratio)
+                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+                
+            # Save to buffer
+            img_io = io.BytesIO()
+            # Quality 85 is usually good enough and keeps size down
+            img.save(img_io, 'JPEG', quality=85)
+            img_io.seek(0)
+            return img_io
+    except Exception as e:
+        print(f"Error optimizing image: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 def delete_image(filename, dish_name):
     upload_folder = current_app.config['UPLOAD_FOLDER']
     file_path = os.path.join(upload_folder, filename)
