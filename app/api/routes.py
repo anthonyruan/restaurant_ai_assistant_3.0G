@@ -119,32 +119,35 @@ def upload_image():
     
     success, result = image_service.upload_image(file, dish_name)
     if success:
-        return jsonify({"filename": result})
+        return jsonify(result) # Returns {url, public_id}
     else:
         return jsonify({"error": result}), 500
 
-@api_bp.route('/images/<filename>', methods=['DELETE'])
-def delete_image(filename):
-    dish_name = request.args.get('dish_name')
-    if not dish_name:
-        return jsonify({"error": "Dish name required"}), 400
+@api_bp.route('/images', methods=['DELETE'])
+def delete_image():
+    public_id = request.args.get('public_id')
+    dish_name = request.args.get('dish_name') # Optional, for compatibility
+    
+    if not public_id:
+        return jsonify({"error": "Public ID required"}), 400
         
-    success = image_service.delete_image(filename, dish_name)
+    success = image_service.delete_image(public_id, dish_name)
     if success:
         return jsonify({"success": True})
     else:
         return jsonify({"error": "Failed to delete"}), 500
 
-@api_bp.route('/images/<filename>/category', methods=['PUT'])
-def update_image_category(filename):
+@api_bp.route('/images/category', methods=['PUT'])
+def update_image_category():
     data = request.json
+    public_id = data.get('public_id')
     old_dish = data.get('old_dish')
     new_dish = data.get('new_dish')
     
-    if not old_dish or not new_dish:
-        return jsonify({"error": "Old and new dish names required"}), 400
+    if not public_id or not new_dish:
+        return jsonify({"error": "Public ID and new dish name required"}), 400
         
-    success = image_service.update_image_category(filename, old_dish, new_dish)
+    success = image_service.update_image_category(public_id, old_dish, new_dish)
     if success:
         return jsonify({"success": True})
     else:

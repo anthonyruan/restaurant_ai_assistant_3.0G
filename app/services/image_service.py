@@ -1,166 +1,209 @@
 import os
-import json
-import shutil
 import random
 import io
 from PIL import Image
-from werkzeug.utils import secure_filename
-from flask import current_app, url_for, send_file
+from flask import current_app
 import cloudinary
 import cloudinary.uploader
+import cloudinary.api
 
-DISH_IMAGE_MAP_PATH = 'dish_image_map.json'
+# No longer needed
+# DISH_IMAGE_MAP_PATH = 'dish_image_map.json'
 
-def get_dish_image_map():
-    if not os.path.exists(DISH_IMAGE_MAP_PATH):
-        return {}
-    try:
-        with open(DISH_IMAGE_MAP_PATH, 'r') as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        return {}
-
-def get_random_image_for_dish(dish_name):
-    dish_map = get_dish_image_map()
-    if dish_name in dish_map and dish_map[dish_name]:
-        filename = random.choice(dish_map[dish_name])
-        # Return full URL
-        return url_for('static', filename=f'images/dishes/{filename}', _external=True)
-    return None
-
-def save_dish_image_map(data):
-    with open(DISH_IMAGE_MAP_PATH, 'w') as f:
-        json.dump(data, f, indent=4)
-
-def get_all_images():
-    dish_map = get_dish_image_map()
-    # Also scan the directory to find unmapped images? 
-    # For now, let's stick to the map as the source of truth for "managed" images.
-    # But we should probably return a flat list or grouped structure.
-    # Let's return the map directly, frontend can parse it.
-    return dish_map
-
-def upload_image(file, dish_name):
-    if not file:
-        return False, "No file provided"
-    
-    filename = secure_filename(file.filename)
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    
-    if not os.path.exists(upload_folder):
-        os.makedirs(upload_folder)
-        
-    # Avoid overwriting
-    base, ext = os.path.splitext(filename)
-    counter = 1
-    while os.path.exists(os.path.join(upload_folder, filename)):
-        filename = f"{base}_{counter}{ext}"
-        counter += 1
-        
-    file.save(os.path.join(upload_folder, filename))
-    
-    # Update map
-    dish_map = get_dish_image_map()
-    if dish_name not in dish_map:
-        dish_map[dish_name] = []
-    
-    dish_map[dish_name].append(filename)
-    save_dish_image_map(dish_map)
-    
-    return True, filename
-
-def optimize_image_for_instagram(filename):
-    # Configure Cloudinary
+def _configure_cloudinary():
     cloudinary.config(
         cloud_name=current_app.config['CLOUDINARY_CLOUD_NAME'],
         api_key=current_app.config['CLOUDINARY_API_KEY'],
         api_secret=current_app.config['CLOUDINARY_API_SECRET']
     )
 
+def get_all_images():
+    _configure_cloudinary()
+    try:
+        # Fetch resources from the specific folder
+        # We need tags and context to group them
+        result = cloudinary.api.resources(
+            type="upload",
+            prefix="restaurant_assistant/dishes/", # Filter by folder
+            tags=True,
+            context=True,
+            max_results=500 # Adjust as needed
+        )
+        
+        images_by_dish = {}
+        
+        for resource in result.get('resources', []):
+            # Try to find dish name from tags
+            dish_name = "Uncategorized"
+            tags = resource.get('tags', [])
+            for tag in tags:
+                if tag.startswith('dish_'):
+                    dish_name = tag[5:] # Remove 'dish_' prefix
+                    break
+            
+            # Fallback to context if no tag (for backward compatibility or manual uploads)
+            if dish_name == "Uncategorized" and 'context' in resource:
+                custom = resource['context'].get('custom', {})
+                if 'caption' in custom:
+                    dish_name = custom['caption']
+            
+            if dish_name not in images_by_dish:
+                images_by_dish[dish_name] = []
+                
+            images_by_dish[dish_name].append({
+                "url": resource.get('secure_url'),
+                "public_id": resource.get('public_id'),
+                "created_at": resource.get('created_at')
+            })
+            
+        return images_by_dish
+        
+    except Exception as e:
+        print(f"Error fetching images from Cloudinary: {e}")
+        return {}
+
+def upload_image(file, dish_name):
+    _configure_cloudinary()
+    if not file:
+        return False, "No file provided"
+    
+    try:
+        # Optimize image before upload (optional, Cloudinary can also do it)
+        # But let's do basic resizing here to save bandwidth
+        img = Image.open(file)
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+            
+        max_width = 1440
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_height = int(img.height * ratio)
+            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+            
+        img_io = io.BytesIO()
+        img.save(img_io, 'JPEG', quality=85)
+        img_io.seek(0)
+        
+        # Upload
+        # Tag format: dish_{dish_name}
+        # Context: caption={dish_name}
+        clean_dish_name = dish_name.strip()
+        tag = f"dish_{clean_dish_name}"
+        
+        upload_result = cloudinary.uploader.upload(
+            img_io,
+            folder="restaurant_assistant/dishes",
+            tags=[tag],
+            context={"caption": clean_dish_name},
+            resource_type="image"
+        )
+        
+        return True, {
+            "url": upload_result.get('secure_url'),
+            "public_id": upload_result.get('public_id')
+        }
+        
+    except Exception as e:
+        print(f"Error uploading to Cloudinary: {e}")
+        return False, str(e)
+
+def delete_image(public_id, dish_name=None):
+    # dish_name is unused but kept for API signature compatibility if needed
+    _configure_cloudinary()
+    try:
+        cloudinary.uploader.destroy(public_id)
+        return True
+    except Exception as e:
+        print(f"Error deleting from Cloudinary: {e}")
+        return False
+
+def update_image_category(public_id, old_dish, new_dish):
+    _configure_cloudinary()
+    try:
+        old_tag = f"dish_{old_dish}"
+        new_tag = f"dish_{new_dish}"
+        
+        # Remove old tag
+        cloudinary.uploader.remove_tag(old_tag, [public_id])
+        # Add new tag
+        cloudinary.uploader.add_tag(new_tag, [public_id])
+        # Update context
+        cloudinary.uploader.add_context({"caption": new_dish}, [public_id])
+        
+        return True
+    except Exception as e:
+        print(f"Error updating image category: {e}")
+        return False
+
+def get_random_image_for_dish(dish_name):
+    _configure_cloudinary()
+    try:
+        # Use Search API to find images with the specific tag
+        tag = f"dish_{dish_name}"
+        expression = f"resource_type:image AND tags:{tag} AND folder:restaurant_assistant/dishes"
+        
+        result = cloudinary.search.Search()\
+            .expression(expression)\
+            .max_results(50)\
+            .execute()
+            
+        resources = result.get('resources', [])
+        if resources:
+            selected = random.choice(resources)
+            return selected.get('secure_url')
+        return None
+        
+    except Exception as e:
+        print(f"Error searching Cloudinary: {e}")
+        return None
+
+def optimize_image_for_instagram(filename):
+    # This function was used when we had local files. 
+    # Now, if we are using Cloudinary, we might just need to return the URL 
+    # if the image is already in Cloudinary.
+    # However, the current flow in routes.py calls this with a filename extracted from a URL?
+    # Wait, routes.py logic:
+    # if 'static/images/dishes/' in image_url: ...
+    
+    # If we migrate fully, we won't have 'static/images/dishes/' URLs anymore.
+    # We will have Cloudinary URLs.
+    # So this function might become obsolete or just a pass-through.
+    
+    # But for now, to support the transition, let's assume if a filename is passed,
+    # it might be a leftover local file (unlikely on Render) or we just return None.
+    
+    # Actually, let's keep it for now but make it upload to Cloudinary if it finds a local file.
+    # But since we are removing local storage, this is only useful if there are files on disk.
+    
+    # Let's reimplement it to be safe: check if file exists locally (unlikely), if so upload.
+    # If not, maybe it's already a Cloudinary URL?
+    
+    # The route logic calls this if URL contains 'static/images/dishes/'.
+    # If we switch to Cloudinary, get_random_image_for_dish returns a Cloudinary URL.
+    # So the condition in routes.py won't trigger.
+    # So this function won't be called for new images.
+    
+    # But what if we want to "optimize" an existing Cloudinary image for Instagram?
+    # Cloudinary does that automatically via URL transformations (f_auto, q_auto, etc).
+    # But Instagram needs a specific URL.
+    
+    # Let's leave this function to handle local files just in case, using the new upload logic.
+    return upload_image_from_local(filename)
+
+def upload_image_from_local(filename):
+    _configure_cloudinary()
     upload_folder = current_app.config['UPLOAD_FOLDER']
     file_path = os.path.join(upload_folder, filename)
     
     if not os.path.exists(file_path):
-        # Try absolute path fallback
-        if not os.path.isabs(file_path):
-             abs_path = os.path.abspath(file_path)
-             if os.path.exists(abs_path):
-                 file_path = abs_path
-             else:
-                 return None
-        else:
-             return None
+        return None
         
     try:
-        with Image.open(file_path) as img:
-            # Convert to RGB if necessary
-            if img.mode in ('RGBA', 'P'):
-                img = img.convert('RGB')
-                
-            # Resize if too large (max width 1440px for Instagram)
-            max_width = 1440
-            if img.width > max_width:
-                ratio = max_width / img.width
-                new_height = int(img.height * ratio)
-                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-                
-            # Save to buffer
-            img_io = io.BytesIO()
-            img.save(img_io, 'JPEG', quality=85)
-            img_io.seek(0)
-            
-            # Upload to Cloudinary
-            print(f"DEBUG: Uploading {filename} to Cloudinary...")
-            upload_result = cloudinary.uploader.upload(
-                img_io, 
-                public_id=os.path.splitext(filename)[0],
-                folder="restaurant_assistant/dishes",
-                overwrite=True,
-                resource_type="image"
-            )
-            
-            secure_url = upload_result.get('secure_url')
-            print(f"DEBUG: Cloudinary upload success: {secure_url}")
-            return secure_url
-            
-    except Exception as e:
-        print(f"Error optimizing/uploading image: {e}")
-        import traceback
-        traceback.print_exc()
+        upload_result = cloudinary.uploader.upload(
+            file_path,
+            folder="restaurant_assistant/dishes",
+            resource_type="image"
+        )
+        return upload_result.get('secure_url')
+    except Exception:
         return None
-
-def delete_image(filename, dish_name):
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    file_path = os.path.join(upload_folder, filename)
-    
-    # Remove from disk
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        
-    # Remove from map
-    dish_map = get_dish_image_map()
-    if dish_name in dish_map and filename in dish_map[dish_name]:
-        dish_map[dish_name].remove(filename)
-        if not dish_map[dish_name]: # Remove key if empty
-            del dish_map[dish_name]
-        save_dish_image_map(dish_map)
-        return True
-    
-    return False
-
-def update_image_category(filename, old_dish, new_dish):
-    dish_map = get_dish_image_map()
-    
-    if old_dish in dish_map and filename in dish_map[old_dish]:
-        dish_map[old_dish].remove(filename)
-        if not dish_map[old_dish]:
-            del dish_map[old_dish]
-            
-        if new_dish not in dish_map:
-            dish_map[new_dish] = []
-        dish_map[new_dish].append(filename)
-        
-        save_dish_image_map(dish_map)
-        return True
-        
-    return False

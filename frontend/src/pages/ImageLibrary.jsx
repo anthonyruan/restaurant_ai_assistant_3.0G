@@ -59,11 +59,11 @@ const ImageLibrary = () => {
         }
     };
 
-    const handleDelete = async (filename, dishName) => {
+    const handleDelete = async (publicId, dishName) => {
         if (!confirm('Are you sure you want to delete this image?')) return;
 
         try {
-            await deleteImage(filename, dishName);
+            await deleteImage(publicId, dishName);
             await fetchImages();
         } catch (error) {
             console.error("Delete failed", error);
@@ -131,16 +131,16 @@ const ImageLibrary = () => {
                                 <h3 className="text-lg font-bold text-gray-800">{dishName} <span className="text-sm font-normal text-gray-500">({fileList.length})</span></h3>
                             </div>
                             <div className="p-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                                {fileList.map((filename) => (
-                                    <div key={filename} className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                                {fileList.map((image) => (
+                                    <div key={image.public_id} className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
                                         <img
-                                            src={`http://127.0.0.1:5000/static/images/dishes/${filename}`}
+                                            src={image.url}
                                             alt={dishName}
                                             className="w-full h-full object-cover"
                                         />
                                         <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
                                             <button
-                                                onClick={() => handleDelete(filename, dishName)}
+                                                onClick={() => handleDelete(image.public_id, dishName)}
                                                 className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
                                                 title="Delete Image"
                                             >

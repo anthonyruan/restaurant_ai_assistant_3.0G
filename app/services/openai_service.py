@@ -4,7 +4,7 @@ import openai
 from flask import current_app
 from app.utils import ttl_cache
 
-from app.services import settings_service
+from app.services import settings_service, image_service
 
 # Hashtags are now fetched dynamically
 
@@ -34,10 +34,9 @@ def generate_weather_caption(weather_data):
     client = get_client()
     
     # Load dish map to get list of dishes
-    dish_map_path = os.path.join(os.getcwd(), 'dish_image_map.json')
+    # Load dish map to get list of dishes
     try:
-        with open(dish_map_path, 'r') as f:
-            dish_image_map = json.load(f)
+        dish_image_map = image_service.get_all_images()
         dish_list = list(dish_image_map.keys())
     except Exception:
         dish_list = []

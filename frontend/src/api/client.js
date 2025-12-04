@@ -18,8 +18,8 @@ export const postToInstagram = (imageUrl, caption) => client.post('/instagram/po
 
 export const getImages = () => client.get('/images');
 export const uploadImage = (formData) => client.post('/images/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-export const deleteImage = (filename, dishName) => client.delete(`/images/${filename}?dish_name=${encodeURIComponent(dishName)}`);
-export const updateImageCategory = (filename, oldDish, newDish) => client.put(`/images/${filename}/category`, { old_dish: oldDish, new_dish: newDish });
+export const deleteImage = (publicId, dishName) => client.delete(`/images?public_id=${encodeURIComponent(publicId)}&dish_name=${encodeURIComponent(dishName)}`);
+export const updateImageCategory = (publicId, oldDish, newDish) => client.put('/images/category', { public_id: publicId, old_dish: oldDish, new_dish: newDish });
 
 export const getSettings = () => client.get('/settings');
 export const updateSettings = (settings) => client.post('/settings', settings);
