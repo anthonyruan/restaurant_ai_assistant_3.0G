@@ -155,6 +155,25 @@ def get_optimized_image(filename):
     else:
         return jsonify({"error": "Image not found or failed to process"}), 404
 
+@api_bp.route('/debug/files', methods=['GET'])
+def debug_files():
+    import os
+    cwd = os.getcwd()
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    
+    info = {
+        "cwd": cwd,
+        "upload_folder": upload_folder,
+        "upload_folder_exists": os.path.exists(upload_folder),
+        "files_in_upload": [],
+        "files_in_cwd": os.listdir(cwd) if os.path.exists(cwd) else []
+    }
+    
+    if os.path.exists(upload_folder):
+        info["files_in_upload"] = os.listdir(upload_folder)
+        
+    return jsonify(info)
+
 @api_bp.route('/settings', methods=['GET', 'POST'])
 def settings():
     if request.method == 'POST':
