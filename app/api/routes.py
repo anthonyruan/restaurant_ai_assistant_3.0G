@@ -93,7 +93,15 @@ def post_instagram():
         # We need the base URL. request.host_url gives http://.../
         # But we want https if on Render. url_for should handle it with _external=True
         from flask import url_for
+        import time
         image_url = url_for('api.get_optimized_image', filename=filename, _external=True)
+        
+        # Force HTTPS
+        if image_url.startswith('http://'):
+            image_url = image_url.replace('http://', 'https://', 1)
+            
+        # Add cache buster
+        image_url += f"?t={int(time.time())}"
     
     result = instagram_service.post_to_instagram(image_url, caption)
     if result['success']:
