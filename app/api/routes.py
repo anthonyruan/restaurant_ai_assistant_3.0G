@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, send_file, current_app
 from app.services import square_service, weather_service, holiday_service, openai_service, instagram_service, image_service, settings_service
 
 
