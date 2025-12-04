@@ -23,6 +23,9 @@ def get_holiday_info(country="US"):
         response = requests.get(url, params=params)
         holidays = response.json().get("response", {}).get("holidays", [])
         
+        # Filter for National holidays only
+        holidays = [h for h in holidays if 'National holiday' in h.get('type', [])]
+        
         if holidays:
             name = holidays[0].get("name", "Holiday")
             return {
