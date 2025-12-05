@@ -69,3 +69,49 @@ def refresh_access_token():
             }
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+def check_token_status():
+    access_token = current_app.config["IG_ACCESS_TOKEN"]
+    if not access_token:
+        return {"success": False, "error": "No access token configured"}
+        
+    # Use Facebook Graph API debug_token endpoint
+    url = "https://graph.facebook.com/v19.0/debug_token"
+    params = {
+        "input_token": access_token,
+        "access_token": access_token # Self-check
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        data = response.json()
+        
+        if response.status_code == 200 and 'data' in data:
+            token_data = data['data']
+            is_valid = token_data.get('is_valid')
+            expires_at = token_data.get('expires_at')
+            
+            if is_valid:
+                import datetime
+                exp_date = datetime.datetime.fromtimestamp(expires_at)
+                now = datetime.datetime.now()
+                days_left = (exp_date - now).days
+                
+                return {
+                    "success": True,
+                    "is_valid": True,
+                    "expires_at": expires_at,
+                    "days_left": days_left,
+                    "scopes": token_data.get('scopes')
+                }
+            else:
+                return {
+                    "success": True,
+                    "is_valid": False,
+                    "error": token_data.get('error', {}).get('message')
+                }
+        else:
+            return {"success": False, "error": "Failed to query Facebook API"}
+            
+    except Exception as e:
+        return {"success": False, "error": str(e)}

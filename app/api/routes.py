@@ -112,6 +112,14 @@ def refresh_instagram_token():
     else:
         return jsonify(result), 500
 
+@api_bp.route('/instagram/token_status', methods=['GET'])
+def get_instagram_token_status():
+    result = instagram_service.check_token_status()
+    if result['success']:
+        return jsonify(result)
+    else:
+        return jsonify(result), 500
+
 @api_bp.route('/images', methods=['GET'])
 def get_images():
     images = image_service.get_all_images()

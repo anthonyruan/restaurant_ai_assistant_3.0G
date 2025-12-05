@@ -10,10 +10,24 @@ const Settings = () => {
     const [refreshing, setRefreshing] = useState(false);
     const [newToken, setNewToken] = useState(null);
     const [newTokenExpires, setNewTokenExpires] = useState(null);
+    const [tokenStatus, setTokenStatus] = useState(null);
 
     useEffect(() => {
         fetchSettings();
+        checkTokenStatus();
     }, []);
+
+    const checkTokenStatus = async () => {
+        try {
+            const { getInstagramTokenStatus } = await import('../api/client');
+            const res = await getInstagramTokenStatus();
+            if (res.data.success) {
+                setTokenStatus(res.data);
+            }
+        } catch (error) {
+            console.error("Failed to check token status", error);
+        }
+    };
 
     const fetchSettings = async () => {
         try {
@@ -129,6 +143,23 @@ const Settings = () => {
                     </h2>
                 </div>
                 <div className="p-6">
+                    {tokenStatus && (
+                        <div className={`mb-6 p-4 rounded-lg border ${tokenStatus.is_valid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                            <h3 className={`text-sm font-bold ${tokenStatus.is_valid ? 'text-green-800' : 'text-red-800'} mb-1`}>
+                                Current Token Status: {tokenStatus.is_valid ? 'Active ✅' : 'Expired ❌'}
+                            </h3>
+                            {tokenStatus.is_valid ? (
+                                <p className="text-sm text-green-700">
+                                    Expires in: <span className="font-bold">{tokenStatus.days_left} days</span> (on {new Date(tokenStatus.expires_at * 1000).toLocaleDateString()})
+                                </p>
+                            ) : (
+                                <p className="text-sm text-red-700">
+                                    Your token has expired. Please refresh it immediately.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     <p className="text-sm text-gray-600 mb-4">
                         Instagram tokens expire every 60 days. Use this button to refresh your token before it expires.
                         <br />
