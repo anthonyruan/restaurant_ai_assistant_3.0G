@@ -7,6 +7,9 @@ const Settings = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
+    const [refreshing, setRefreshing] = useState(false);
+    const [newToken, setNewToken] = useState(null);
+    const [newTokenExpires, setNewTokenExpires] = useState(null);
 
     useEffect(() => {
         fetchSettings();
@@ -36,6 +39,28 @@ const Settings = () => {
             setMessage({ type: 'error', text: 'Failed to save settings.' });
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleRefreshToken = async () => {
+        setRefreshing(true);
+        setMessage(null);
+        setNewToken(null);
+        try {
+            const { refreshInstagramToken } = await import('../api/client');
+            const res = await refreshInstagramToken();
+            if (res.data.success) {
+                setNewToken(res.data.access_token);
+                setNewTokenExpires(res.data.expires_in);
+                setMessage({ type: 'success', text: 'Token refreshed successfully! Please copy the new token below.' });
+            } else {
+                setMessage({ type: 'error', text: 'Failed to refresh token: ' + res.data.error });
+            }
+        } catch (error) {
+            console.error("Failed to refresh token", error);
+            setMessage({ type: 'error', text: 'Failed to refresh token. Is your current token already expired?' });
+        } finally {
+            setRefreshing(false);
         }
     };
 
@@ -93,6 +118,49 @@ const Settings = () => {
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            {/* Instagram Token Section */}
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mt-8">
+                <div className="p-6 border-b border-gray-100 bg-gray-50">
+                    <h2 className="text-lg font-bold text-gray-800 flex items-center">
+                        <span className="mr-2 text-pink-500">📸</span> Instagram Token Management
+                    </h2>
+                </div>
+                <div className="p-6">
+                    <p className="text-sm text-gray-600 mb-4">
+                        Instagram tokens expire every 60 days. Use this button to refresh your token before it expires.
+                        <br />
+                        <span className="font-bold text-red-500">Important:</span> After refreshing, you must manually update the <code>IG_ACCESS_TOKEN</code> in your Render Dashboard.
+                    </p>
+
+                    <button
+                        onClick={handleRefreshToken}
+                        disabled={refreshing}
+                        className="flex items-center px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors disabled:opacity-50 mb-4"
+                    >
+                        {refreshing ? 'Refreshing...' : 'Refresh Token Now'}
+                    </button>
+
+                    {newToken && (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+                            <h3 className="text-sm font-bold text-yellow-800 mb-2">New Token Generated!</h3>
+                            <p className="text-xs text-yellow-700 mb-2">Copy this token and paste it into your Render Environment Variables:</p>
+                            <div className="flex items-center">
+                                <code className="flex-1 bg-white border border-gray-200 p-2 rounded text-xs break-all font-mono">
+                                    {newToken}
+                                </code>
+                                <button
+                                    onClick={() => navigator.clipboard.writeText(newToken)}
+                                    className="ml-2 px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">Expires in: {(newTokenExpires / 86400).toFixed(1)} days</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

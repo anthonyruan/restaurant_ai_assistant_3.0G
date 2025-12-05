@@ -40,3 +40,32 @@ def post_to_instagram(image_url, caption):
             
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+def refresh_access_token():
+    access_token = current_app.config["IG_ACCESS_TOKEN"]
+    if not access_token:
+        return {"success": False, "error": "No access token found"}
+        
+    url = "https://graph.instagram.com/refresh_access_token"
+    params = {
+        "grant_type": "ig_refresh_token",
+        "access_token": access_token
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        data = response.json()
+        
+        if response.status_code == 200:
+            return {
+                "success": True,
+                "access_token": data.get("access_token"),
+                "expires_in": data.get("expires_in")
+            }
+        else:
+            return {
+                "success": False, 
+                "error": data.get("error", {}).get("message", "Unknown error")
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e)}

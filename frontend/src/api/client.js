@@ -15,6 +15,7 @@ export const getHoliday = () => client.get('/holiday');
 export const generateCaption = (mode, data) => client.post('/generate/caption', { mode, ...data });
 export const generateImage = (mode, data) => client.post('/generate/image', { mode, ...data });
 export const postToInstagram = (imageUrl, caption) => client.post('/instagram/post', { image_url: imageUrl, caption });
+export const refreshInstagramToken = () => client.post('/instagram/refresh_token');
 
 export const getImages = () => client.get('/images');
 export const uploadImage = (formData) => client.post('/images/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });

@@ -104,6 +104,14 @@ def post_instagram():
     else:
         return jsonify(result), 500
 
+@api_bp.route('/instagram/refresh_token', methods=['POST'])
+def refresh_instagram_token():
+    result = instagram_service.refresh_access_token()
+    if result['success']:
+        return jsonify(result)
+    else:
+        return jsonify(result), 500
+
 @api_bp.route('/images', methods=['GET'])
 def get_images():
     images = image_service.get_all_images()
