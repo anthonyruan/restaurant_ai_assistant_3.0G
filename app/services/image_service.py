@@ -139,8 +139,68 @@ def get_random_image_for_dish(dish_name):
     _configure_cloudinary()
     try:
         # Use Search API to find images with the specific tag
+        # 1. Exact Match
         tag = f"dish_{dish_name}"
-        expression = f"resource_type:image AND tags:{tag} AND folder:restaurant_assistant/dishes"
+        result = _search_cloudinary(tag)
+        if result: return result
+
+        # 2. Alias / Synonym Check (Hardcoded for common mapping)
+        # e.g. "Chicken Banhmi" -> "Chicken Sandwich"
+        
+        # Define base aliases
+        aliases = {
+            "Banhmi": "Sandwich",
+            "Bánh Mì": "Sandwich",
+            "Banh Mi": "Sandwich"
+        }
+        
+        mapped_name = dish_name
+        for key, value in aliases.items():
+            if key.lower() in mapped_name.lower():
+                mapped_name = mapped_name.lower().replace(key.lower(), value).title() # Simple replace
+        
+        if mapped_name != dish_name:
+            tag = f"dish_{mapped_name}"
+            result = _search_cloudinary(tag)
+            if result: return result
+
+        # 3. Fallback: If the name contains "Sandwich", try searching for just "Sandwich" category
+        # This handles "Chicken Sandwich" -> finding "Sandwich" generic images
+        if "Sandwich" in dish_name and dish_name != "Sandwich":
+             tag = "dish_Sandwich"
+             result = _search_cloudinary(tag)
+             if result: return result
+
+        # 4. Super Fallback (Python-side filtering):
+        # If Search API fails or index is slow, we use our own list.
+        if len(dish_name.split()) == 1: 
+             all_images = get_all_images() # Uses cached result if possible or fetches fresh
+             matches = []
+             target = dish_name.lower()
+             
+             for dish_key, images in all_images.items():
+                 # Check if the dish category itself contains the target word
+                 # e.g. dish_key="Chicken Sandwich" contains "sandwich"
+                 if target in dish_key.lower():
+                     matches.extend(images)
+            
+             if matches:
+                 selected = random.choice(matches)
+                 return selected['url']
+
+        return None
+
+    except Exception as e:
+        print(f"Error searching Cloudinary: {e}")
+        return None
+
+def _search_cloudinary(tag, exact=True):
+    try:
+        # If exact match, use quotes for strict tag matching
+        # If broad (exact=False), use wildcard pattern
+        tag_query = f"\"{tag}\"" if exact else tag
+        
+        expression = f"resource_type:image AND tags:{tag_query} AND folder:restaurant_assistant/dishes"
         
         result = cloudinary.search.Search()\
             .expression(expression)\
@@ -151,11 +211,11 @@ def get_random_image_for_dish(dish_name):
         if resources:
             selected = random.choice(resources)
             return selected.get('secure_url')
-        return None
-        
     except Exception as e:
-        print(f"Error searching Cloudinary: {e}")
-        return None
+        print(f"Error searching Cloudinary for {tag}: {e}")
+    return None
+        
+
 
 def optimize_image_for_instagram(filename):
     # This function was used when we had local files. 

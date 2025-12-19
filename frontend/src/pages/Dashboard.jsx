@@ -12,6 +12,7 @@ const Dashboard = () => {
     const [salesState, setSalesState] = useState({
         dishes: [],
         selectedDish: null,
+        dishVariant: '',
         caption: '',
         imageUrl: '',
         loadingDishes: true,

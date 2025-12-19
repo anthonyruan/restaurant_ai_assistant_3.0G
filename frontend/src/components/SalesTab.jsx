@@ -32,17 +32,19 @@ const SalesTab = ({ state, setState }) => {
             return;
         }
 
-        setState(prev => ({ ...prev, selectedDish: dish }));
+        // Reset variant when switching dishes
+        setState(prev => ({ ...prev, selectedDish: dish, dishVariant: '' }));
 
-        // Trigger generation
+        // Trigger generation (initially without variant)
         handleGenerateCaption(dish.name);
-        handleGenerateImage(dish.name);
+        handleGenerateImage(dish.name); // This will call with "" variant initially, which is fine
     };
 
     const handleGenerateCaption = async (dishName) => {
         setState(prev => ({ ...prev, loadingCaption: true }));
+        const fullDishName = state.dishVariant ? `${state.dishVariant} ${dishName}` : dishName;
         try {
-            const res = await generateCaption('sales', { dish_name: dishName });
+            const res = await generateCaption('sales', { dish_name: fullDishName });
             setState(prev => ({ ...prev, caption: res.data.caption, loadingCaption: false }));
         } catch (error) {
             console.error(error);
@@ -52,8 +54,9 @@ const SalesTab = ({ state, setState }) => {
 
     const handleGenerateImage = async (dishName) => {
         setState(prev => ({ ...prev, loadingImage: true }));
+        const fullDishName = state.dishVariant ? `${state.dishVariant} ${dishName}` : dishName;
         try {
-            const res = await generateImage('sales', { dish_name: dishName });
+            const res = await generateImage('sales', { dish_name: fullDishName });
             setState(prev => ({ ...prev, imageUrl: res.data.image_url, loadingImage: false }));
         } catch (error) {
             console.error(error);
@@ -75,23 +78,45 @@ const SalesTab = ({ state, setState }) => {
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {dishes.map((dish, index) => (
-                                <div
-                                    key={index}
-                                    onClick={() => handleSelectDish(dish, true)} // Clicking manually forces regeneration
-                                    className={`p-4 rounded-xl cursor-pointer transition-all border-2 ${selectedDish?.name === dish.name
-                                        ? 'border-primary bg-blue-50'
-                                        : 'border-transparent hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-semibold text-gray-800">{dish.name}</span>
-                                        <span className="bg-white px-2 py-1 rounded-md text-xs font-bold text-gray-500 shadow-sm">
-                                            {dish.sold} sold
-                                        </span>
+                            {dishes.map((dish, index) => {
+                                const isSelected = selectedDish?.name === dish.name;
+                                return (
+                                    <div
+                                        key={index}
+                                        onClick={() => !isSelected && handleSelectDish(dish, true)}
+                                        className={`p-4 rounded-xl cursor-pointer transition-all border-2 ${isSelected
+                                            ? 'border-primary bg-blue-50'
+                                            : 'border-transparent hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-semibold text-gray-800">{dish.name}</span>
+                                            <span className="bg-white px-2 py-1 rounded-md text-xs font-bold text-gray-500 shadow-sm">
+                                                {dish.sold} sold
+                                            </span>
+                                        </div>
+
+                                        {isSelected && (
+                                            <div onClick={(e) => e.stopPropagation()} className="mt-2 animate-fade-in">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Specify type (e.g., Chicken, Tofu)..."
+                                                    value={state.dishVariant}
+                                                    onChange={(e) => setState(prev => ({ ...prev, dishVariant: e.target.value }))}
+                                                    className="w-full text-sm border border-blue-200 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            handleGenerateCaption(dish.name);
+                                                            handleGenerateImage(dish.name);
+                                                        }
+                                                    }}
+                                                />
+                                                <p className="text-xs text-blue-500 mt-1">Press Enter to regenerate with details</p>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -100,7 +125,7 @@ const SalesTab = ({ state, setState }) => {
             {/* Right Column: Content Generator */}
             <div className="lg:col-span-2">
                 <ContentCard
-                    title={selectedDish ? `Promote: ${selectedDish.name}` : 'Select a dish'}
+                    title={selectedDish ? `Promote: ${state.dishVariant ? state.dishVariant + ' ' : ''}${selectedDish.name}` : 'Select a dish'}
                     caption={caption}
                     imageUrl={imageUrl}
                     onRegenerateCaption={() => selectedDish && handleGenerateCaption(selectedDish.name)}
